@@ -1,0 +1,7 @@
+{
+    "dependencies": ["./agent.py"],
+    "graphs": {
+        "react_agent_template": "./agent.py:workflow"
+    },
+    "env": "./.env"
+}
