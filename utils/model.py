@@ -1,6 +1,16 @@
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
+import os
+from dotenv import load_dotenv
 
-model = ChatOllama(
-    model="gpt-oss:20b",
-    temperature=0
+
+load_dotenv()
+openai_api_key = os.getenv("OPENAI_API_KEY")
+
+if not openai_api_key:
+    raise ValueError(
+        "API key not found! Please set OPENAI_API_KEY environment variable."
+    )
+
+model = ChatOpenAI(
+    api_key=openai_api_key
 )
