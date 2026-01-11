@@ -1,21 +1,18 @@
 import uuid
 
-from langgraph.prebuilt import create_react_agent
-from utils.model import model
-from utils.state import CustomState
-from utils.tools import addition
+from langchain.agents import create_agent
+from utils.model import dynamic_model_selection, basic_model
+from utils.tools import tools
 
 
 system_prompt = """This is a generic agent template using Langgraph's prebuilt agent.
 
 """
 
-workflow = create_react_agent(
-    name="react-agent-template",
-    model=model,
-    state_schema=CustomState,
-    prompt=system_prompt,
-    tools=[addition],
+workflow = create_agent(
+    basic_model, 
+    tools=tools,
+    middleware=[dynamic_model_selection]
 )
 
 async def chat():

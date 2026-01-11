@@ -10,3 +10,5 @@ def addition(a: int, b: int) -> int:
     """
     print("In tool")
     return a + b
+
+tools = [addition]
