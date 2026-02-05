@@ -136,7 +136,7 @@ async def sort_classrooms_by_distance(
         return f"Error: {e}"
 
 @tool
-async def query_classrooms_basic(
+def query_classrooms_basic(
     seminar_setup: bool = False,
     lecture_setup: bool = False,
     group_learning: bool = False,
@@ -158,48 +158,49 @@ async def query_classrooms_basic(
         A formatted string with classroom results
     """
     try:
-        # Build query parameters
-        params = {
-            "limit": 50
-        }
+        # Build SQL query
+        conditions = []
+        params = []
         
         if seminar_setup:
-            params["seminarSetup"] = "true"
+            conditions.append('"seminarSetup" = %s')
+            params.append(True)
         if lecture_setup:
-            params["lectureSetup"] = "true"
+            conditions.append('"lectureSetup" = %s')
+            params.append(True)
         if group_learning:
-            params["groupLearning"] = "true"
+            conditions.append('"groupLearning" = %s')
+            params.append(True)
         if class_size:
-            params["minSeats"] = max(1, class_size - 5)
-            params["maxSeats"] = class_size + 10
-            
-        # Call backend classroom service
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BACKEND_URL}/api/classrooms",
-                params=params,
-                timeout=10.0
-            )
-            response.raise_for_status()
-            
-            data = response.json()
-            classrooms = data.get("data", [])
-            
-            if not classrooms:
-                return "No classrooms found matching the basic criteria. Try adjusting the requirements."
-            
-            # Format results for LLM
-            result_text = f"Found {len(classrooms)} classrooms:\n\n"
-            for classroom in classrooms[:10]:  # Show top 10
-                result_text += f"- {classroom['building']} {classroom['room']}: {classroom['seatCount']} seats\n"
-            
-            return result_text
-            
+            conditions.append('"seatCount" >= %s AND "seatCount" <= %s')
+            params.extend([max(1, class_size - 5), class_size + 10])
+        
+        query = 'SELECT * FROM "Classroom"'
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " LIMIT 50"
+        
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                classrooms = cur.fetchall()
+        
+        if not classrooms:
+            return "No classrooms found matching the basic criteria. Try adjusting the requirements."
+        
+        # Format results for LLM
+        result_text = f"Found {len(classrooms)} classrooms:\n\n"
+        for classroom in classrooms[:10]:  # Show top 10
+            result_text += f"- {classroom['building']} {classroom['room']}: {classroom['seatCount']} seats\n"
+        
+        return result_text
+        
     except Exception as e:
         return f"Error querying classrooms: {str(e)}"
 
+
 @tool
-async def query_classrooms_with_amenities(
+def query_classrooms_with_amenities(
     seminar_setup: bool = False,
     lecture_setup: bool = False,
     group_learning: bool = False,
@@ -253,76 +254,96 @@ async def query_classrooms_with_amenities(
         A formatted string with detailed classroom results
     """
     try:
-        # Build query parameters with all filters
-        params = {"limit": 3}
+        # Build SQL query
+        conditions = []
+        params = []
         
         # Essential criteria
         if seminar_setup:
-            params["seminarSetup"] = "true"
+            conditions.append('"seminarSetup" = %s')
+            params.append(True)
         if lecture_setup:
-            params["lectureSetup"] = "true"
+            conditions.append('"lectureSetup" = %s')
+            params.append(True)
         if group_learning:
-            params["groupLearning"] = "true"
+            conditions.append('"groupLearning" = %s')
+            params.append(True)
         if class_size:
-            params["minSeats"] = max(1, class_size - 5)
-            params["maxSeats"] = class_size + 10
-            
-        # Amenities
+            conditions.append('"seatCount" >= %s AND "seatCount" <= %s')
+            params.extend([max(1, class_size - 5), class_size + 10])
+        
+        # Amenities - string fields
         if projection_surface:
-            params["projectionSurface"] = projection_surface
+            conditions.append('"projectionSurface" = %s')
+            params.append(projection_surface)
         if computer:
-            params["computer"] = computer
+            conditions.append('"computer" = %s')
+            params.append(computer)
         if microphone:
-            params["microphone"] = microphone
+            conditions.append('"microphone" = %s')
+            params.append(microphone)
         if zoom_room:
-            params["zoomRoom"] = zoom_room
-        if classroom_capture is not None:
-            params["classroomCapture"] = str(classroom_capture).lower()
-        if group_learning_screens is not None:
-            params["groupLearningScreens"] = str(group_learning_screens).lower()
-        if white_board is not None:
-            params["whiteBoard"] = str(white_board).lower()
-        if chalk_board is not None:
-            params["chalkBoard"] = str(chalk_board).lower()
-        if dual_board_screen_use is not None:
-            params["dualBoardScreenUse"] = str(dual_board_screen_use).lower()
-        if group_learning_boards is not None:
-            params["groupLearningBoards"] = str(group_learning_boards).lower()
+            conditions.append('"zoomRoom" = %s')
+            params.append(zoom_room)
         if teaching_station:
-            params["teachingStation"] = teaching_station
-        if windows is not None:
-            params["windows"] = str(windows).lower()
-        if ac is not None:
-            params["ac"] = str(ac).lower()
+            conditions.append('"teachingStation" = %s')
+            params.append(teaching_station)
         if floor_type:
-            params["floorType"] = floor_type
+            conditions.append('"floorType" = %s')
+            params.append(floor_type)
         if furniture:
-            params["furniture"] = furniture
+            conditions.append('"furniture" = %s')
+            params.append(furniture)
+            
+        # Amenities - boolean fields
+        if classroom_capture is not None:
+            conditions.append('"classroomCapture" = %s')
+            params.append(classroom_capture)
+        if group_learning_screens is not None:
+            conditions.append('"groupLearningScreens" = %s')
+            params.append(group_learning_screens)
+        if white_board is not None:
+            conditions.append('"whiteBoard" = %s')
+            params.append(white_board)
+        if chalk_board is not None:
+            conditions.append('"chalkBoard" = %s')
+            params.append(chalk_board)
+        if dual_board_screen_use is not None:
+            conditions.append('"dualBoardScreenUse" = %s')
+            params.append(dual_board_screen_use)
+        if group_learning_boards is not None:
+            conditions.append('"groupLearningBoards" = %s')
+            params.append(group_learning_boards)
+        if windows is not None:
+            conditions.append('"windows" = %s')
+            params.append(windows)
+        if ac is not None:
+            conditions.append('"ac" = %s')
+            params.append(ac)
         if film_screening is not None:
-            params["filmScreening"] = str(film_screening).lower()
-            
-        # Call backend classroom service
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{BACKEND_URL}/api/classrooms",
-                params=params,
-                timeout=10.0
-            )
-            response.raise_for_status()
-            
-            data = response.json()
-            classrooms = data.get("data", [])
-            
-            if not classrooms:
-                return "No classrooms found matching all the specified amenities. Consider relaxing some requirements."
-            
-            # Format detailed results
-            result_text = f"Found {len(classrooms)} classroom(s) with your amenities:\n\n"
-            for classroom in classrooms:
-                result_text += f"- {classroom['building']} {classroom['room']}: {classroom['seatCount']} seats\n"
-            
-            return result_text
-            
+            conditions.append('"filmScreening" = %s')
+            params.append(film_screening)
+        
+        query = 'SELECT * FROM "Classroom"'
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " LIMIT 3"
+        
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, params)
+                classrooms = cur.fetchall()
+        
+        if not classrooms:
+            return "No classrooms found matching all the specified amenities. Consider relaxing some requirements."
+        
+        # Format detailed results
+        result_text = f"Found {len(classrooms)} classroom(s) with your amenities:\n\n"
+        for classroom in classrooms:
+            result_text += f"- {classroom['building']} {classroom['room']}: {classroom['seatCount']} seats\n"
+        
+        return result_text
+        
     except Exception as e:
         return f"Error querying classrooms with amenities: {str(e)}"
 
