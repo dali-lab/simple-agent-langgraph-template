@@ -1,4 +1,14 @@
 langgraph
+langgraph-api
+langchain
 langchain_core
 langchain_ollama
-langgraph-cli[inmem]
+langchain_dartmouth
+langchain_openai
+langgraph-cli
+python-dotenv
+fastapi
+uvicorn
+pydantic
+httpx
+psycopg2-binary
